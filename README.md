@@ -1,4 +1,4 @@
-"""
+
 Portfolio Tracker & Risk Analytics App
 
 Overview:
