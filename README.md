@@ -1,7 +1,6 @@
 
 Portfolio Tracker & Risk Analytics App
 
-Overview:
 This application allows users to create and analyse stock portfolios using historical market data.
 It integrates financial data, portfolio construction, and risk analysis in a simple system.
 
