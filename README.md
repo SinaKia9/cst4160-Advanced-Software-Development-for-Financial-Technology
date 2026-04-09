@@ -82,20 +82,13 @@ How to Run
    SMTP_SERVER=smtp.gmail.com
    SMTP_PORT=587
 
-3. If needed, delete old database:
-   del portfolio.db
-
-4. Run terminal app:
+3. Run terminal app:
    python app.py
 
-5. Run Streamlit app:
+4. Run Streamlit app:
    python -m streamlit run streamlit_app.py
 
-6. Run tests:
+5. Run tests:
    python -m pytest 
 
-Notes
-- This project is a simulation and analysis tool, not a live trading system
-- Portfolio results are based on historical market data
-- Momentum strategy assumes past price trends may continue in the short term
-- Each user can save and manage their own portfolios through the application
+Note: Each student provides the global variables (config.py) and required .env details in the appendix of their individual report
