@@ -76,12 +76,12 @@ How to Run
 
 2. Create a .env file with:
 
-ALPACA_API_KEY=your_alpaca_key
-ALPACA_API_SECRET=your_alpaca_secret
-EMAIL_ADDRESS=your_email@gmail.com
-EMAIL_APP_PASSWORD=your_app_password
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
+- ALPACA_API_KEY=your_alpaca_key
+- ALPACA_API_SECRET=your_alpaca_secret
+- EMAIL_ADDRESS=your_email@gmail.com
+- EMAIL_APP_PASSWORD=your_app_password
+- SMTP_SERVER=smtp.gmail.com
+- SMTP_PORT=587
 
 4. Run terminal app:
    python app.py
