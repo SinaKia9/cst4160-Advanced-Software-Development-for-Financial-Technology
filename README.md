@@ -75,6 +75,7 @@ How to Run
    python -m pip install -r requirements.txt
 
 2. Create a .env file with:
+
    ALPACA_API_KEY=your_alpaca_key
    ALPACA_API_SECRET=your_alpaca_secret
    EMAIL_ADDRESS=your_email@gmail.com
@@ -82,13 +83,13 @@ How to Run
    SMTP_SERVER=smtp.gmail.com
    SMTP_PORT=587
 
-3. Run terminal app:
+4. Run terminal app:
    python app.py
 
-4. Run Streamlit app:
+5. Run Streamlit app:
    python -m streamlit run streamlit_app.py
 
-5. Run tests:
+6. Run tests:
    python -m pytest 
 
 Note: Each student provides the global variables (config.py) and required .env details in the appendix of their individual report
