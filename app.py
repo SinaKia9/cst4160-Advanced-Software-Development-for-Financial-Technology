@@ -1,16 +1,13 @@
 import pandas as pd
 from datetime import datetime, timedelta
 
-from config import (
-    HISTORY_DAYS,
-    MARKET_BENCHMARK,
-    STARTING_CAPITAL
-)
+from config import HISTORY_DAYS, MARKET_BENCHMARK, STARTING_CAPITAL
 from core.auth import (
     hash_password,
     verify_password,
     is_valid_email,
-    generate_reset_token
+    generate_code,
+    send_email_code,
 )
 from core.universe import UNIVERSE_TICKERS
 from core.portfolio import build_portfolio
@@ -18,7 +15,7 @@ from core.strategy import select_top_momentum_tickers
 from core.weighting import (
     equal_weighting,
     momentum_weighting,
-    inverse_volatility_weighting
+    inverse_volatility_weighting,
 )
 from services.market_data import fetch_historical_bars
 from data.db import (
@@ -26,8 +23,9 @@ from data.db import (
     create_user,
     get_user_by_username,
     get_user_by_email,
-    get_user_by_reset_token,
-    save_reset_token,
+    save_verification_code,
+    verify_user_email,
+    save_reset_code,
     update_user_password,
     create_portfolio,
     save_holdings,
@@ -35,13 +33,20 @@ from data.db import (
     save_report,
     load_portfolio,
     list_portfolios,
-    get_portfolio_id
+    get_portfolio_id,
 )
 from core.risk import risk_report
 
 
 def pct(x):
     return f"{round(float(x) * 100, 2)}%"
+
+
+def expiry_valid(expiry_str):
+    if not expiry_str:
+        return False
+    expiry_time = datetime.strptime(expiry_str, "%Y-%m-%d %H:%M:%S")
+    return datetime.utcnow() <= expiry_time
 
 
 def display_report(portfolio_name, report):
@@ -63,13 +68,17 @@ def display_report(portfolio_name, report):
     print(f"Risk contribution: {risk_pct}")
 
 
+
 def ask_to_save(message):
     return input(f"\n{message} (y/n): ").strip().lower() == "y"
 
 
+
 def get_starting_capital():
     while True:
-        user_input = input(f"Enter starting capital (press Enter for default {STARTING_CAPITAL}): ").strip()
+        user_input = input(
+            f"Enter starting capital (press Enter for default {STARTING_CAPITAL}): "
+        ).strip()
 
         if user_input == "":
             return STARTING_CAPITAL
@@ -82,6 +91,7 @@ def get_starting_capital():
             pass
 
         print("Invalid capital, try again.")
+
 
 
 def choose_strategy_mode():
@@ -98,6 +108,7 @@ def choose_strategy_mode():
             return "momentum"
 
         print("Invalid choice, try again.")
+
 
 
 def choose_weighting_method():
@@ -117,6 +128,7 @@ def choose_weighting_method():
             return "inverse_volatility"
 
         print("Invalid choice, try again.")
+
 
 
 def choose_momentum_type():
@@ -141,6 +153,7 @@ def choose_momentum_type():
         print("Invalid choice, try again.")
 
 
+
 def build_weights(method, price_df, tickers, strategy_type="combined"):
     if method == "equal":
         return equal_weighting(tickers)
@@ -149,6 +162,7 @@ def build_weights(method, price_df, tickers, strategy_type="combined"):
     if method == "inverse_volatility":
         return inverse_volatility_weighting(price_df, tickers)
     raise ValueError("Invalid weighting method.")
+
 
 
 def register_user():
@@ -188,7 +202,50 @@ def register_user():
 
     password_hash = hash_password(password)
     create_user(username, email, password_hash)
-    print("Account created successfully.")
+
+    code = generate_code()
+    expiry = (datetime.utcnow() + timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
+    save_verification_code(email, code, expiry)
+
+    try:
+        send_email_code(
+            email,
+            "Verify your email",
+            f"Your verification code is: {code}\n\nThis code expires in 15 minutes.",
+        )
+        print("Account created successfully. Verification code sent to your email.")
+    except Exception:
+        print("Account created successfully.")
+        print(f"Verification code: {code}")
+        print("Use this code to verify your email.")
+
+
+
+def verify_email_flow():
+    print("\n--- Verify Email ---")
+    email = input("Enter your email: ").strip()
+    code = input("Enter verification code: ").strip()
+
+    user = get_user_by_email(email)
+    if user is None:
+        print("Email not found.")
+        return
+
+    if user[4] == 1:
+        print("Email already verified.")
+        return
+
+    if user[5] != code:
+        print("Invalid verification code.")
+        return
+
+    if not expiry_valid(user[6]):
+        print("Verification code expired.")
+        return
+
+    verify_user_email(email)
+    print("Email verified successfully.")
+
 
 
 def login_user():
@@ -204,6 +261,8 @@ def login_user():
 
         if user is None:
             print("User not found.")
+        elif user[4] != 1:
+            print("Please verify your email first.")
         elif not verify_password(password, user[3]):
             print("Invalid password.")
         else:
@@ -211,8 +270,9 @@ def login_user():
             return {
                 "user_id": user[0],
                 "username": user[1],
-                "email": user[2]
+                "email": user[2],
             }
+
 
 
 def forgot_password():
@@ -224,34 +284,38 @@ def forgot_password():
         print("Email not found.")
         return
 
-    token = generate_reset_token()[:8]
+    code = generate_code()
     expiry = (datetime.utcnow() + timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
-    save_reset_token(email, token, expiry)
+    save_reset_code(email, code, expiry)
 
-    print(f"Reset code: {token}")
-    print("Use this code in the reset password option within 15 minutes.")
+    try:
+        send_email_code(
+            email,
+            "Password reset code",
+            f"Your password reset code is: {code}\n\nThis code expires in 15 minutes.",
+        )
+        print("A reset code has been sent to your email.")
+    except Exception:
+        print(f"Reset code: {code}")
+        print("Use this code in the reset password option within 15 minutes.")
+
 
 
 def reset_password():
     print("\n--- Reset Password ---")
     email = input("Enter your email: ").strip()
-    token = input("Enter reset code: ").strip()
+    code = input("Enter reset code: ").strip()
 
     user = get_user_by_email(email)
     if user is None:
         print("Email not found.")
         return
 
-    if user[4] != token:
+    if user[7] != code:
         print("Invalid reset code.")
         return
 
-    if not user[5]:
-        print("No reset token expiry found.")
-        return
-
-    expiry_time = datetime.strptime(user[5], "%Y-%m-%d %H:%M:%S")
-    if datetime.utcnow() > expiry_time:
+    if not expiry_valid(user[8]):
         print("Reset code expired.")
         return
 
@@ -269,6 +333,7 @@ def reset_password():
 
     update_user_password(email, hash_password(new_password))
     print("Password updated successfully.")
+
 
 
 def create_new_portfolio(user):
@@ -295,7 +360,7 @@ def create_new_portfolio(user):
 
         while True:
             ticker_input = input("\nEnter 3 to 7 tickers: ").strip()
-            selected_tickers = [t.strip() for t in ticker_input.split(",") if t.strip()]
+            selected_tickers = [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
 
             if 3 <= len(selected_tickers) <= 7:
                 break
@@ -313,10 +378,12 @@ def create_new_portfolio(user):
 
         selected_tickers = select_top_momentum_tickers(
             universe_bars,
-            strategy_type=strategy_type
+            strategy_type=strategy_type,
         )
 
-        portfolio_bars = universe_bars[universe_bars["ticker"].isin(selected_tickers)].copy()
+        portfolio_bars = universe_bars[
+            universe_bars["ticker"].isin(selected_tickers)
+        ].copy()
 
     holdings = build_weights(weighting_method, portfolio_bars, selected_tickers, strategy_type)
     benchmark_bars = fetch_historical_bars([MARKET_BENCHMARK], HISTORY_DAYS)
@@ -337,6 +404,7 @@ def create_new_portfolio(user):
         print("\nPortfolio not saved.")
 
 
+
 def load_existing_portfolio_flow(user):
     portfolios = list_portfolios(user["user_id"])
 
@@ -345,8 +413,8 @@ def load_existing_portfolio_flow(user):
         return
 
     print("\nSaved portfolios:")
-    for p in portfolios:
-        print(f"- {p}")
+    for portfolio_name in portfolios:
+        print(f"- {portfolio_name}")
 
     while True:
         name = input("\nEnter portfolio name: ").strip()
@@ -376,6 +444,7 @@ def load_existing_portfolio_flow(user):
         print("\nReport not saved.")
 
 
+
 def user_menu(user):
     while True:
         print(f"\n--- Welcome, {user['username']} ---")
@@ -396,28 +465,33 @@ def user_menu(user):
             print("Invalid choice, try again.")
 
 
+
 def main():
     init_db()
 
     while True:
         print("\n1. Register")
-        print("2. Login")
-        print("3. Forgot password")
-        print("4. Reset password")
-        print("5. Exit")
+        print("2. Verify email")
+        print("3. Login")
+        print("4. Forgot password")
+        print("5. Reset password")
+        print("6. Exit")
 
         choice = input("\nEnter choice: ").strip()
 
         if choice == "1":
             register_user()
         elif choice == "2":
-            user = login_user()
-            user_menu(user)
+            verify_email_flow()
         elif choice == "3":
-            forgot_password()
+            user = login_user()
+            if user is not None:
+                user_menu(user)
         elif choice == "4":
-            reset_password()
+            forgot_password()
         elif choice == "5":
+            reset_password()
+        elif choice == "6":
             print("Goodbye.")
             break
         else:
