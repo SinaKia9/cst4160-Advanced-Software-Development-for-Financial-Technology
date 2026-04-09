@@ -166,8 +166,7 @@ def show_report(portfolio_name, report, selected_tickers, strategy_label, holdin
 
 st.set_page_config(page_title="Portfolio Tracker", layout="wide")
 st.title("Portfolio Tracker & Risk Analytics")
-st.write("Register, verify your email, log in, and manage your own portfolios.")
-
+st.write("Manage your own portfolios.")
 if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
