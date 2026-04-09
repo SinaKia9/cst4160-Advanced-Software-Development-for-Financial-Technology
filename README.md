@@ -92,7 +92,7 @@ How to Run
    python -m streamlit run streamlit_app.py
 
 6. Run tests:
-   python -m pytest -q
+   python -m pytest 
 
 Notes
 - This project is a simulation and analysis tool, not a live trading system
